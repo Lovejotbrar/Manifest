@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Manifest Route Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+:root {
+  --bg: #020617;
+  --panel: #0f172a;
+  --card: #020617;
+  --accent: #3b82f6;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --success: #22c55e;
+}
+
+* {
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(135deg, #020617, #0f172a);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 18px;
+}
+
+.header h1 {
+  font-size: 1.9rem;
+  margin-bottom: 6px;
+}
+
+.header p {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.card {
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 25px 60px rgba(0,0,0,.45);
+}
+
+.grid {
+  display: grid;
+  gap: 18px;
+}
+
+@media (min-width: 900px) {
+  .grid {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+label {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+textarea, select {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  color: var(--text);
+  padding: 12px;
+}
+
+textarea {
+  min-height: 280px;
+  resize: vertical;
+}
+
+select {
+  margin-top: 6px;
+}
+
+button {
+  width: 100%;
+  margin-top: 12px;
+  background: var(--accent);
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stats {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: flex;
+  justify-content: space-between;
+}
+
+.output {
+  margin-top: 18px;
+}
+
+.footer {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.upload-box {
+  background: var(--card);
+  border: 1px dashed #1e293b;
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.upload-box label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.upload-box input[type="file"] {
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+  border: none;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.upload-box input[type="file"]::-webkit-file-upload-button {
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  padding: 6px 12px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.upload-box input[type="file"]::file-selector-button {
+  background: var(--accent);
+  border: none;
+  border-radius: 10px;
+  padding: 6px 12px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+</style>
+</head>
+
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>🚚 Manifest Route Dashboard</h1>
+    <p>Upload one manifest • Select route • Export Google My Maps CSV</p>
+  </div>
+
+  <div class="card">
+    <div class="grid">
+
+      <!-- MANIFEST INPUT -->
+      <div>
+        <label>Paste Full Manifest (All Routes)</label>
+        <textarea id="manifest" placeholder="Paste the entire manifest here..." oninput="detectRoutes()"></textarea>
+
+        <br>
+      <div class="upload-box">
+  <label>Upload Manifest PDF</label>
+  <input type="file" accept="application/pdf" onchange="loadPDF(this)" />
+</div>
+
+
+      </div>
+
+      <!-- ROUTE SELECTION -->
+      <div>
+        <label>Detected Routes</label>
+        <select id="routeSelect" onchange="generateCSV()">
+          <option value="">— Paste manifest first —</option>
+        </select>
+
+        <div class="stats">
+          <span>Stops Found</span>
+          <span id="count">0</span>
+        </div>
+
+        <button onclick="downloadCSV()">Download CSV</button>
+      </div>
+
+    </div>
+
+    <div class="output">
+      <label>CSV Output</label>
+      <textarea id="output" readonly></textarea>
+    </div>
+  </div>
+
+  <div class="footer">
+    Offline • Mobile Ready • No Uploads • Professional Tool
+  </div>
+
+</div>
+
+<script>
+let manifestText = "";
+let latestCSV = "";
+
+function detectRoutes() {
+  manifestText = document.getElementById("manifest").value;
+  const select = document.getElementById("routeSelect");
+  select.innerHTML = "";
+
+  const routeSet = new Set();
+  const regex = /Route\s*-\s*([A-Z0-9]+)/g;
+  let match;
+
+  while ((match = regex.exec(manifestText)) !== null) {
+    routeSet.add(match[1]);
+  }
+
+  if (!routeSet.size) {
+    select.innerHTML = `<option>No routes detected</option>`;
+    return;
+  }
+
+  select.innerHTML = `<option value="">— Select Route —</option>`;
+  [...routeSet].sort().forEach(r => {
+    const opt = document.createElement("option");
+    opt.value = r;
+    opt.textContent = r;
+    select.appendChild(opt);
+  });
+}
+
+function generateCSV() {
+  const route = document.getElementById("routeSelect").value;
+  if (!route) return;
+
+  const lines = manifestText.replace(/\r/g, "").split("\n");
+  let active = false;
+  let rows = [];
+
+  for (let line of lines) {
+    if (line.includes(`Route - ${route}`)) {
+      active = true;
+      continue;
+    }
+
+    if (active && line.startsWith("Route -") && !line.includes(route)) {
+      break;
+    }
+
+    if (!active) continue;
+
+    if (
+      line.includes("Code Tracking") ||
+      line.includes("Intelcom Courrier") ||
+      line.startsWith("From ") ||
+      line.trim() === route
+    ) continue;
+
+    const match = line.match(/\b(\d{1,3})\s+(.+?)(?=\s+\d+(\.\d+)?\s+(CM|IN))/);
+    if (match) {
+      rows.push({
+        seq: match[1],
+        address: match[2].replace(/\s+/g, " ").trim()
+      });
+    }
+  }
+
+  let csv = "Seq,Address\n";
+  rows.forEach(r => csv += `${r.seq},"${r.address}"\n`);
+
+  latestCSV = csv;
+  document.getElementById("output").value = csv;
+  document.getElementById("count").innerText = rows.length;
+}
+
+function downloadCSV() {
+  if (!latestCSV) return;
+  const blob = new Blob([latestCSV], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "route.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+<script>
+async function loadPDF(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async function () {
+    const typedarray = new Uint8Array(this.result);
+    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+
+    let rawText = "";
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      rawText += content.items.map(i => i.str).join(" ") + " ";
+    }
+
+    const normalized = normalizeManifestText(rawText);
+    document.getElementById("manifest").value = normalized;
+    detectRoutes();
+  };
+
+  reader.readAsArrayBuffer(file);
+}
+</script>
+
+<script>
+function normalizeManifestText(text) {
+
+  // Remove headers / repeated blocks
+  text = text.replace(/Intelcom Courrier Projet Amazon - ON/g, " ");
+  text = text.replace(/From .*? \d{2}:\d{2}/g, " ");
+  text = text.replace(/Code\s+Tracking ID\s+Seq\s+Address\s+Dimensions\s+Signature/g, " ");
+
+  // Normalize whitespace
+  text = text.replace(/\s+/g, " ").trim();
+
+  // Force route headers onto new lines
+  text = text.replace(/(Route\s*-\s*[A-Z0-9]+)/g, "\n$1\n");
+
+  // Insert line breaks BEFORE each valid Seq
+  // Seq must be followed by a street number
+  text = text.replace(
+    /(\s|^)(\d{1,3})\s+(?=\d{1,6}\s+[A-Za-z])/g,
+    "\n$2 "
+  );
+
+  // Insert line break after dimensions (end of stop)
+  text = text.replace(
+    /(\d+(\.\d+)?\s*(CM|IN)\s*X\s*\d+(\.\d+)?\s*(CM|IN)\s*X\s*\d+(\.\d+)?\s*(CM|IN))/g,
+    "$1\n"
+  );
+
+  return text.trim();
+}
+</script>
+
+</body>
+</html>
